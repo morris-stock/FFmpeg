@@ -975,7 +975,7 @@ static int mov_get_lpcm_flags(enum AVCodecID codec_id)
     }
 }
 
-static int get_cluster_duration(MOVTrack *track, int cluster_idx)
+static int get_cluster_duration(MOVTrack *track, unsigned int cluster_idx)
 {
     int64_t next_dts;
 

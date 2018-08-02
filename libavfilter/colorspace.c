@@ -74,7 +74,7 @@ void ff_fill_rgb2xyz_table(const struct PrimaryCoefficients *coeffs,
     rgb2xyz[2][0] = (1.0 - coeffs->xr - coeffs->yr) / coeffs->yr;
     rgb2xyz[2][1] = (1.0 - coeffs->xg - coeffs->yg) / coeffs->yg;
     rgb2xyz[2][2] = (1.0 - coeffs->xb - coeffs->yb) / coeffs->yb;
-    ff_matrix_invert_3x3(rgb2xyz, i);
+    ff_matrix_invert_3x3((const double (*)[3])rgb2xyz, i);
     zw = 1.0 - wp->xw - wp->yw;
     sr = i[0][0] * wp->xw + i[0][1] * wp->yw + i[0][2] * zw;
     sg = i[1][0] * wp->xw + i[1][1] * wp->yw + i[1][2] * zw;

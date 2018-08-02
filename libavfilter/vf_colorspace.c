@@ -382,8 +382,8 @@ static void fill_whitepoint_conv_table(double out[3][3], enum WhitepointAdaptati
     fac[1][1] = gd / gs;
     fac[2][2] = bd / bs;
     fac[0][1] = fac[0][2] = fac[1][0] = fac[1][2] = fac[2][0] = fac[2][1] = 0.0;
-    ff_matrix_mul_3x3(tmp, ma, fac);
-    ff_matrix_mul_3x3(out, tmp, mai);
+    ff_matrix_mul_3x3(tmp, ma, (const double (*)[3])fac);
+    ff_matrix_mul_3x3(out, (const double (*)[3])tmp, (const double (*)[3])mai);
 }
 
 static void apply_lut(int16_t *buf[3], ptrdiff_t stride,
@@ -438,7 +438,7 @@ static int convert(AVFilterContext *ctx, void *data, int job_nr, int n_jobs)
         // since in that case, only the diagonal entries in yuv2yuv_coeffs[]
         // are non-zero
         s->yuv2yuv(out_data, td->out_linesize, in_data, td->in_linesize, w, h,
-                   s->yuv2yuv_coeffs, s->yuv_offset);
+                   (const int16_t (*)[3][8])s->yuv2yuv_coeffs, (const int16_t (*)[8])s->yuv_offset);
     } else {
         // FIXME maybe (for caching effciency) do pipeline per-line instead of
         // full buffer per function? (Or, since yuv2rgb requires 2 lines: per
@@ -460,19 +460,19 @@ static int convert(AVFilterContext *ctx, void *data, int job_nr, int n_jobs)
          * - all coefficients are 14bit (so in the [-2.0,2.0] range).
          */
         s->yuv2rgb(rgb, s->rgb_stride, in_data, td->in_linesize, w, h,
-                   s->yuv2rgb_coeffs, s->yuv_offset[0]);
+                   (const int16_t (*)[3][8])s->yuv2rgb_coeffs, s->yuv_offset[0]);
         if (!s->rgb2rgb_passthrough) {
             apply_lut(rgb, s->rgb_stride, w, h, s->lin_lut);
             if (!s->lrgb2lrgb_passthrough)
-                s->dsp.multiply3x3(rgb, s->rgb_stride, w, h, s->lrgb2lrgb_coeffs);
+                s->dsp.multiply3x3(rgb, s->rgb_stride, w, h, (const int16_t (*)[3][8])s->lrgb2lrgb_coeffs);
             apply_lut(rgb, s->rgb_stride, w, h, s->delin_lut);
         }
         if (s->dither == DITHER_FSB) {
             s->rgb2yuv_fsb(out_data, td->out_linesize, rgb, s->rgb_stride, w, h,
-                           s->rgb2yuv_coeffs, s->yuv_offset[1], s->dither_scratch);
+                           (const int16_t (*)[3][8])s->rgb2yuv_coeffs, s->yuv_offset[1], s->dither_scratch);
         } else {
             s->rgb2yuv(out_data, td->out_linesize, rgb, s->rgb_stride, w, h,
-                       s->rgb2yuv_coeffs, s->yuv_offset[1]);
+                       (const int16_t (*)[3][8])s->rgb2yuv_coeffs, s->yuv_offset[1]);
         }
     }
 
@@ -589,7 +589,7 @@ static int create_filtergraph(AVFilterContext *ctx,
             wp_out = &whitepoint_coefficients[s->out_primaries->wp];
             wp_in = &whitepoint_coefficients[s->in_primaries->wp];
             ff_fill_rgb2xyz_table(&s->out_primaries->coeff, wp_out, rgb2xyz);
-            ff_matrix_invert_3x3(rgb2xyz, xyz2rgb);
+            ff_matrix_invert_3x3((const double (*)[3])rgb2xyz, xyz2rgb);
             ff_fill_rgb2xyz_table(&s->in_primaries->coeff, wp_in, rgb2xyz);
             if (s->out_primaries->wp != s->in_primaries->wp &&
                 s->wp_adapt != WP_ADAPT_IDENTITY) {
@@ -597,10 +597,10 @@ static int create_filtergraph(AVFilterContext *ctx,
 
                 fill_whitepoint_conv_table(wpconv, s->wp_adapt, s->in_primaries->wp,
                                            s->out_primaries->wp);
-                ff_matrix_mul_3x3(tmp, rgb2xyz, wpconv);
-                ff_matrix_mul_3x3(rgb2rgb, tmp, xyz2rgb);
+                ff_matrix_mul_3x3(tmp, (const double (*)[3])rgb2xyz, (const double (*)[3])wpconv);
+                ff_matrix_mul_3x3(rgb2rgb, (const double (*)[3])tmp, (const double (*)[3])xyz2rgb);
             } else {
-                ff_matrix_mul_3x3(rgb2rgb, rgb2xyz, xyz2rgb);
+                ff_matrix_mul_3x3(rgb2rgb, (const double (*)[3])rgb2xyz, (const double (*)[3])xyz2rgb);
             }
             for (m = 0; m < 3; m++)
                 for (n = 0; n < 3; n++) {
@@ -725,7 +725,7 @@ static int create_filtergraph(AVFilterContext *ctx,
             for (n = 0; n < 8; n++)
                 s->yuv_offset[0][n] = off;
             fill_rgb2yuv_table(s->in_lumacoef, rgb2yuv);
-            ff_matrix_invert_3x3(rgb2yuv, yuv2rgb);
+            ff_matrix_invert_3x3((const double (*)[3])rgb2yuv, yuv2rgb);
             bits = 1 << (in_desc->comp[0].depth - 1);
             for (n = 0; n < 3; n++) {
                 for (in_rng = s->in_y_rng, m = 0; m < 3; m++, in_rng = s->in_uv_rng) {
@@ -781,7 +781,7 @@ static int create_filtergraph(AVFilterContext *ctx,
             double yuv2yuv[3][3];
             int in_rng, out_rng;
 
-            ff_matrix_mul_3x3(yuv2yuv, yuv2rgb, rgb2yuv);
+            ff_matrix_mul_3x3(yuv2yuv, (const double (*)[3])yuv2rgb, (const double (*)[3])rgb2yuv);
             for (out_rng = s->out_y_rng, m = 0; m < 3; m++, out_rng = s->out_uv_rng) {
                 for (in_rng = s->in_y_rng, n = 0; n < 3; n++, in_rng = s->in_uv_rng) {
                     s->yuv2yuv_coeffs[m][n][0] =
